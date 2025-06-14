@@ -1,70 +1,64 @@
-using Microsoft.EntityFrameworkCore;
-using TicketBookingSystem.Data;
 using TicketBookingSystem.Models.DTOs;
+using TicketBookingSystem.Data;
 using TicketBookingSystem.Models.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace TicketBookingSystem.Services
 {
     public class PaymentService : IPaymentService
     {
         private readonly AppDbContext _context;
-        private readonly ITicketService _ticketService;
 
-        public PaymentService(AppDbContext context, ITicketService ticketService)
+        public PaymentService(AppDbContext context)
         {
             _context = context;
-            _ticketService = ticketService;
         }
 
-        public async Task<(int paymentId, int ticketId)> PayAsync(PaymentDto dto)
+        public async Task<int> ProcessPaymentAsync(PaymentRequestDto dto)
         {
-            // Перевірка наявності броні
             var booking = await _context.Bookings
+                .Include(b => b.Schedule)
                 .FirstOrDefaultAsync(b => b.Id == dto.BookingId && b.Status == "booked");
 
             if (booking == null)
-                throw new InvalidOperationException("Неможливо здійснити оплату. Бронювання не знайдено або неактивне.");
+                throw new InvalidOperationException("Бронювання не знайдено або вже неактивне.");
 
-            // Створення запису оплати
+            var existingPayment = await _context.Payments
+                .FirstOrDefaultAsync(p => p.BookingId == booking.Id);
+
+            if (existingPayment != null)
+                throw new InvalidOperationException("Оплата для цього бронювання вже здійснена.");
+
+            var price = booking.Price;
+
             var payment = new Payment
             {
-                UserId = dto.UserId,
-                BookingId = dto.BookingId,
-                Amount = dto.Amount,
+                BookingId = booking.Id,
                 PaymentMethod = dto.PaymentMethod,
+                Amount = price,
                 PaymentTime = DateTime.UtcNow
             };
 
             _context.Payments.Add(payment);
-            await _context.SaveChangesAsync();
 
-            // Створення квитка після оплати
-            var ticketId = await _ticketService.PurchaseTicketAsync(new PurchaseTicketDto
+            var ticket = new Ticket
             {
-                BookingId = dto.BookingId.Value,
-                Price = dto.Amount
-            });
-
-            // Прив’язка квитка до оплати
-            payment.TicketId = ticketId;
-            await _context.SaveChangesAsync();
-
-            return (payment.Id, ticketId);
-        }
-
-        public async Task<PaymentDto?> GetByIdAsync(int id)
-        {
-            var payment = await _context.Payments.FindAsync(id);
-            if (payment == null) return null;
-
-            return new PaymentDto
-            {
-                UserId = payment.UserId,
-                BookingId = payment.BookingId,
-                TicketId = payment.TicketId,
-                Amount = payment.Amount,
-                PaymentMethod = payment.PaymentMethod
+                ScheduleId = booking.ScheduleId,
+                FromStationId = booking.FromStationId,
+                ToStationId = booking.ToStationId,
+                UserId = booking.UserId,
+                Price = price,
             };
+
+            _context.Tickets.Add(ticket);
+            await _context.SaveChangesAsync();
+
+            payment.TicketId = ticket.Id;
+            booking.Status = "cancelled"; // бронювання переходить в квиток
+
+            await _context.SaveChangesAsync();
+
+            return payment.Id;
         }
     }
 }

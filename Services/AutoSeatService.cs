@@ -17,7 +17,7 @@ namespace TicketBookingSystem.Services
         {
             var stops = await _context.ScheduleStops
                 .Where(s => s.ScheduleId == scheduleId)
-                .Include(s => s.Station)
+                .OrderBy(s => s.StopOrder)
                 .ToListAsync();
 
             var fromStop = stops.FirstOrDefault(s => s.StationId == fromStationId);
@@ -31,69 +31,61 @@ namespace TicketBookingSystem.Services
 
             const int MAX_SEATS = 5;
 
-            // Створюємо мапу зайнятості
             var seatMap = new Dictionary<int, List<(int from, int to)>>();
 
-            var tickets = await _context.Tickets.Where(t => t.ScheduleId == scheduleId).ToListAsync();
-            var bookings = await _context.Bookings.Where(b => b.ScheduleId == scheduleId && b.Status == "booked").ToListAsync();
+            var tickets = await _context.Tickets
+                .Where(t => t.ScheduleId == scheduleId)
+                .Select(t => new { t.SeatNumber, t.FromStationId, t.ToStationId })
+                .ToListAsync();
 
-            void AddOccupied(int seat, int sFrom, int sTo)
-            {
-                if (!seatMap.ContainsKey(seat))
-                    seatMap[seat] = new List<(int from, int to)>();
-                seatMap[seat].Add((sFrom, sTo));
-            }
-
-            int GetOrder(int stationId) =>
-                stops.FirstOrDefault(s => s.StationId == stationId)?.StopOrder ?? -1;
+            var bookings = await _context.Bookings
+                .Where(b => b.ScheduleId == scheduleId && b.Status == "booked")
+                .Select(b => new { b.SeatNumber, b.FromStationId, b.ToStationId })
+                .ToListAsync();
 
             foreach (var t in tickets)
-                AddOccupied(t.SeatNumber, GetOrder(t.FromStationId), GetOrder(t.ToStationId));
+            {
+                var tFrom = stops.FirstOrDefault(s => s.StationId == t.FromStationId)?.StopOrder ?? -1;
+                var tTo = stops.FirstOrDefault(s => s.StationId == t.ToStationId)?.StopOrder ?? -1;
+                if (tFrom != -1 && tTo != -1)
+                {
+                    if (!seatMap.ContainsKey(t.SeatNumber))
+                        seatMap[t.SeatNumber] = new List<(int, int)>();
+                    seatMap[t.SeatNumber].Add((tFrom, tTo));
+                }
+            }
 
             foreach (var b in bookings)
-                AddOccupied(b.SeatNumber, GetOrder(b.FromStationId), GetOrder(b.ToStationId));
-
-            int? bestSeat = null;
-            int bestFragmentScore = int.MaxValue;
+            {
+                var bFrom = stops.FirstOrDefault(s => s.StationId == b.FromStationId)?.StopOrder ?? -1;
+                var bTo = stops.FirstOrDefault(s => s.StationId == b.ToStationId)?.StopOrder ?? -1;
+                if (bFrom != -1 && bTo != -1)
+                {
+                    if (!seatMap.ContainsKey(b.SeatNumber))
+                        seatMap[b.SeatNumber] = new List<(int, int)>();
+                    seatMap[b.SeatNumber].Add((bFrom, bTo));
+                }
+            }
 
             for (int seat = 1; seat <= MAX_SEATS; seat++)
             {
-                var occupied = seatMap.ContainsKey(seat)
-                    ? seatMap[seat].OrderBy(s => s.from).ToList()
-                    : new List<(int from, int to)>();
+                var occupied = seatMap.ContainsKey(seat) ? seatMap[seat] : new List<(int, int)>();
 
-                // Перевіряємо, чи є конфлікт
-                bool conflict = occupied.Any(seg =>
-                    !(toOrder <= seg.from || fromOrder >= seg.to));
-
-                if (conflict)
-                    continue;
-
-                // Вставляємо тимчасово сегмент і рахуємо фрагментацію
-                occupied.Add((fromOrder, toOrder));
-                occupied = occupied.OrderBy(s => s.from).ToList();
-
-                int fragments = 0;
-                int lastEnd = 0;
-
-                foreach (var seg in occupied)
+                bool isFree = true;
+                foreach (var segment in occupied)
                 {
-                    if (lastEnd < seg.from)
-                        fragments++;
-                    lastEnd = Math.Max(lastEnd, seg.to);
+                    if (!(toOrder <= segment.Item1 || fromOrder >= segment.Item2))
+                    {
+                        isFree = false;
+                        break;
+                    }
                 }
 
-                if (lastEnd < stops.Max(s => s.StopOrder))
-                    fragments++;
-
-                if (fragments < bestFragmentScore)
-                {
-                    bestFragmentScore = fragments;
-                    bestSeat = seat;
-                }
+                if (isFree)
+                    return seat;
             }
 
-            return bestSeat;
+            return null;
         }
     }
 }

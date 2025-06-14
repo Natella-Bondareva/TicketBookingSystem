@@ -15,7 +15,9 @@ namespace TicketBookingSystem.Models.Entities
         public int SeatNumber { get; set; }
         public string Status { get; set; } // active, cancelled
         public DateTime ExpirationTime { get; set; }
+        public decimal Price { get; set; }
         public User User { get; set; }
         public Schedule Schedule { get; set; }
+        public Ticket Ticket { get; set; }
     }
 }

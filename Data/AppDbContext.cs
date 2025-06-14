@@ -33,6 +33,11 @@ namespace TicketBookingSystem.Data
                 .HasForeignKey(r => r.StartStationId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<Ticket>()
+                .HasOne(t => t.Booking)
+                .WithOne(b => b.Ticket)
+                .HasForeignKey<Ticket>(t => t.BookingId);
+
             modelBuilder.Entity<RouteEntity>()
                 .HasOne(r => r.EndStation)
                 .WithMany()

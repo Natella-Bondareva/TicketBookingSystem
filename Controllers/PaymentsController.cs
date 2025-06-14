@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using TicketBookingSystem.Models.DTOs;
 using TicketBookingSystem.Services;
+using Microsoft.AspNetCore.Authorization;
+
 
 
 namespace TicketBookingSystem.Controllers
@@ -16,19 +18,17 @@ namespace TicketBookingSystem.Controllers
             _paymentService = paymentService;
         }
 
-        //Оплата + створення квитка
+        /// <summary>
+        /// Оплата за бронювання та видача квитка
+        /// </summary>
         [HttpPost]
-        public async Task<IActionResult> Pay([FromBody] PaymentDto dto)
+        [Authorize(Roles = "cashier")]
+        public async Task<IActionResult> Pay([FromBody] PaymentRequestDto dto)
         {
             try
             {
-                var result = await _paymentService.PayAsync(dto);
-                return Ok(new
-                {
-                    paymentId = result.paymentId,
-                    ticketId = result.ticketId,
-                    status = "paid"
-                });
+                var paymentId = await _paymentService.ProcessPaymentAsync(dto);
+                return Ok(new { message = "Оплату проведено та квиток видано", paymentId });
             }
             catch (InvalidOperationException ex)
             {
@@ -36,13 +36,13 @@ namespace TicketBookingSystem.Controllers
             }
         }
 
-        //Перегляд оплати
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
-        {
-            var payment = await _paymentService.GetByIdAsync(id);
-            if (payment == null) return NotFound();
-            return Ok(payment);
-        }
+        ////Перегляд оплати
+        //[HttpGet("{id}")]
+        //public async Task<IActionResult> GetById(int id)
+        //{
+        //    var payment = await _paymentService.GetByIdAsync(id);
+        //    if (payment == null) return NotFound();
+        //    return Ok(payment);
+        //}
     }
 }

@@ -14,5 +14,7 @@ namespace TicketBookingSystem.Models.Entities
         public DateTime PaymentTime { get; set; }
         public string PaymentMethod { get; set; } // cash, card, online, other
         public User User { get; set; }
+        public Ticket Ticket { get; set; }
+
     }
 }

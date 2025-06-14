@@ -15,5 +15,8 @@ namespace TicketBookingSystem.Models.Entities
         public decimal Price { get; set; }
         public User User { get; set; }
         public Schedule Schedule { get; set; }
+        public Payment Payment { get; set; }
+        public int BookingId { get; set; } 
+        public Booking Booking { get; set; }
     }
 }
