@@ -27,8 +27,13 @@ namespace TicketBookingSystem.Controllers
         {
             try
             {
-                var paymentId = await _paymentService.ProcessPaymentAsync(dto);
-                return Ok(new { message = "Оплату проведено та квиток видано", paymentId });
+                var result = await _paymentService.ProcessPaymentAsync(dto);
+                return Ok(new
+                {
+                    message = "Оплату успішно здійснено, квиток видано",
+                    paymentId = result.PaymentId,
+                    ticketId = result.TicketId
+                });
             }
             catch (InvalidOperationException ex)
             {

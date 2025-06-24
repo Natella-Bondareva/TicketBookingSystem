@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TicketBookingSystem.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using TicketBookingSystem.Services;
 
 
 namespace TicketBookingSystem.Controllers
@@ -9,38 +10,52 @@ namespace TicketBookingSystem.Controllers
     [Route("api/[controller]")]
     public class RoutesController : ControllerBase
     {
-        // Список всіх маршрутів
+        private readonly IRouteService _routeService;
+
+        public RoutesController(IRouteService routeService)
+        {
+            _routeService = routeService;
+        }
+
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            // Отримати всі маршрути логіка тут
-            return Ok(new[] { new { id = 1, from = "A", to = "B" } });
+            var routes = await _routeService.GetAllAsync();
+            return Ok(routes);
         }
 
-        // Інформація про один маршрут
         [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
-            // Пошук маршруту логіка тут
-            return Ok(new { id, from = "A", to = "B" });
+            var route = await _routeService.GetByIdAsync(id);
+            if (route == null)
+                return NotFound();
+            return Ok(route);
         }
 
-        // Додати маршрут (адмін)
         [Authorize(Roles = "admin")]
         [HttpPost]
-        public IActionResult Create([FromBody] CreateRouteDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateRouteDto dto)
         {
-            // Додавання маршруту логіка тут
-            return Ok(new { message = "Route created" });
+            var success = await _routeService.CreateAsync(dto);
+            return success ? Ok(new { message = "Route created" }) : BadRequest();
         }
 
-        // Оновити маршрут (адмін)
         [Authorize(Roles = "admin")]
         [HttpPut("{id}")]
-        public IActionResult Update(int id, [FromBody] UpdateRouteDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateRouteDto dto)
         {
-            // Оновлення маршруту логіка тут
-            return Ok(new { message = "Route updated" });
+            var success = await _routeService.UpdateAsync(id, dto);
+            return success ? Ok(new { message = "Route updated" }) : NotFound();
+        }
+
+        [Authorize(Roles = "admin")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var success = await _routeService.DeleteAsync(id);
+            return success ? Ok(new { message = "Route deleted" }) : NotFound();
         }
     }
+
 }

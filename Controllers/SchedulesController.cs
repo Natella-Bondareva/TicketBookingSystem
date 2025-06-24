@@ -19,36 +19,61 @@ namespace TicketBookingSystem.Controllers
 
         }
 
-        //Отримати всі розклади
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            // Можна реалізувати при потребі
-            return Ok(new[] { new { id = 1, routeId = 1, date = "2025-06-13" } });
+            var schedules = await _scheduleService.GetAllAsync();
+            return Ok(schedules);
         }
 
-        //Отримати один розклад за ID
         [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        public async Task<IActionResult> GetById(int id)
         {
-            // Можна розширити деталями при потребі
-            return Ok(new { id, routeId = 1, date = "2025-06-13" });
+            var schedule = await _scheduleService.GetByIdAsync(id);
+            if (schedule == null) return NotFound();
+            return Ok(schedule);
         }
 
-        //Отримати розклади для конкретного маршруту
         [HttpGet("route/{routeId}")]
-        public IActionResult GetByRoute(int routeId)
+        public async Task<IActionResult> GetByRoute(int routeId)
         {
-            // Можна реалізувати при потребі
-            return Ok(new[] { new { id = 1, routeId, date = "2025-06-13" } });
+            var schedules = await _scheduleService.GetByRouteIdAsync(routeId);
+            return Ok(schedules);
         }
 
-        // Отримати список зупинок для конкретного розкладу
-        [HttpGet("{scheduleId}/stops")]
-        public async Task<IActionResult> GetStops(int scheduleId)
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateScheduleDto dto)
         {
-            var stops = await _scheduleService.GetStopsByScheduleIdAsync(scheduleId);
-            return Ok(stops);
+            var id = await _scheduleService.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { id }, new { id });
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateScheduleDto dto)
+        {
+            var success = await _scheduleService.UpdateAsync(id, dto);
+            if (!success) return NotFound();
+            return Ok(new { message = "Updated successfully" });
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var success = await _scheduleService.DeleteAsync(id);
+            if (!success) return NotFound();
+            return Ok(new { message = "Deleted successfully" });
+        }
+
+        [HttpPut("{scheduleId}/stops/{stationId}")]
+        public async Task<IActionResult> UpdateStop(int scheduleId, int stationId, [FromBody] UpdateScheduleStopDto dto)
+        {
+            if (dto.ScheduleId != scheduleId || dto.StationId != stationId)
+                return BadRequest("IDs in URL and body must match");
+
+            var success = await _scheduleService.UpdateScheduleStopAsync(dto);
+            if (!success) return NotFound();
+
+            return Ok(new { message = "Schedule stop updated" });
         }
 
         [HttpPost("with-transfers")]

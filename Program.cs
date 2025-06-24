@@ -16,14 +16,32 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IBookingService, BookingService>();
-builder.Services.AddScoped<ITicketService, TicketService>();
+//builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAutoSeatService, AutoSeatService>();
-builder.Services.AddScoped<IAutoSeatService, AutoSeatService>();
+builder.Services.AddScoped<IStationService, StationService>();
+builder.Services.AddScoped<IRouteService, RouteService>();
+
+
 builder.Services.AddScoped<TokenService>();
-builder.Services.AddScoped<UserService>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173") // адреса React
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // іноді потрібно, якщо куки
+
+    });
+});
+
+
+
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -88,6 +106,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseCors("AllowFrontend");
 app.UseAuthorization();
 app.MapControllers();
 app.Run();

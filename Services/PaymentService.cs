@@ -14,51 +14,58 @@ namespace TicketBookingSystem.Services
             _context = context;
         }
 
-        public async Task<int> ProcessPaymentAsync(PaymentRequestDto dto)
+        public async Task<PaymentResponseDto> ProcessPaymentAsync(PaymentRequestDto dto)
         {
             var booking = await _context.Bookings
-                .Include(b => b.Schedule)
-                .FirstOrDefaultAsync(b => b.Id == dto.BookingId && b.Status == "booked");
+                .Include(b => b.BookingStatus)
+                .FirstOrDefaultAsync(b => b.Id == dto.BookingId);
 
             if (booking == null)
-                throw new InvalidOperationException("Бронювання не знайдено або вже неактивне.");
+                throw new InvalidOperationException("Бронювання не знайдено.");
+
+            if (booking.BookingStatus.Name == "completed")
+                throw new InvalidOperationException("Це бронювання вже оплачено.");
 
             var existingPayment = await _context.Payments
                 .FirstOrDefaultAsync(p => p.BookingId == booking.Id);
 
             if (existingPayment != null)
-                throw new InvalidOperationException("Оплата для цього бронювання вже здійснена.");
+                throw new InvalidOperationException("Оплата вже зареєстрована.");
 
-            var price = booking.Price;
+            // Перевірка суми
+            if (dto.Amount < booking.Price)
+                throw new InvalidOperationException("Недостатня сума оплати.");
 
+            // Створення оплати
             var payment = new Payment
             {
                 BookingId = booking.Id,
-                PaymentMethod = dto.PaymentMethod,
-                Amount = price,
+                UserId = dto.CashierId, // отриманий з UI або токена
+                PaymentMethodId = dto.PaymentMethodId,
+                Amount = dto.Amount,
                 PaymentTime = DateTime.UtcNow
             };
-
             _context.Payments.Add(payment);
 
+            // Оновлення статусу бронювання
+            booking.BookingStatusId = 3; // completed
+
+            // Створення квитка
             var ticket = new Ticket
             {
-                ScheduleId = booking.ScheduleId,
-                FromStationId = booking.FromStationId,
-                ToStationId = booking.ToStationId,
-                UserId = booking.UserId,
-                Price = price,
+                BookingId = booking.Id
             };
-
             _context.Tickets.Add(ticket);
-            await _context.SaveChangesAsync();
-
-            payment.TicketId = ticket.Id;
-            booking.Status = "cancelled"; // бронювання переходить в квиток
 
             await _context.SaveChangesAsync();
 
-            return payment.Id;
+            return new PaymentResponseDto
+            {
+                PaymentId = payment.Id,
+                TicketId = ticket.Id,
+                Amount = payment.Amount,
+                PaidAt = payment.PaymentTime
+            };
         }
     }
 }

@@ -1,0 +1,48 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 24px;
+}
+.table th, .table td {
+  border: 1px solid #e0e0e0;
+  padding: 8px 12px;
+  text-align: left;
+}
+.table th {
+  background: #f5f7fa;
+  font-weight: 600;
+}
+.table tr:nth-child(even) {
+  background: #f9f9f9;
+}
+.table tr:hover {
+  background: #e3e6ee;
+}
+.formRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  margin-bottom: 18px;
+}
+.formRow input {
+  padding: 8px 10px;
+  border: 1px solid #b0bec5;
+  border-radius: 5px;
+  font-size: 1rem;
+  min-width: 120px;
+}
+.formRow button {
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 18px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.formRow button:hover {
+  background: #1565c0;
+}

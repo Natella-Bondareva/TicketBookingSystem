@@ -1,0 +1,28 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 32px;
+  background: #0d47a1;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.logo {
+  font-weight: bold;
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+}
+.btn {
+  margin-left: 12px;
+  padding: 8px 18px;
+  background: #1976d2;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.btn:hover {
+  background: #1565c0;
+}

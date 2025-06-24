@@ -8,13 +8,14 @@ namespace TicketBookingSystem.Models.Entities
     {
         public int Id { get; set; }
         public int UserId { get; set; }
-        public int? BookingId { get; set; }
-        public int? TicketId { get; set; }
+        public int BookingId { get; set; }
         public decimal Amount { get; set; }
         public DateTime PaymentTime { get; set; }
-        public string PaymentMethod { get; set; } // cash, card, online, other
-        public User User { get; set; }
-        public Ticket Ticket { get; set; }
 
+        public int PaymentMethodId { get; set; }
+        public PaymentMethod PaymentMethod { get; set; }
+
+        public User User { get; set; }
+        public Booking Booking { get; set; }
     }
 }

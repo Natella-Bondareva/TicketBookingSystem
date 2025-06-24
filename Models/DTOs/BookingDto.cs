@@ -18,21 +18,30 @@ namespace TicketBookingSystem.Models.DTOs
     {
         public int BookingId { get; set; }
         public decimal Price { get; set; }
+        public string SeatCode { get; set; } = string.Empty;
     }
 
     /// <summary>
-    /// DTO для короткого перегляду бронювання (у списку)
+    /// DTO для розширеного перегляду бронювання (у списку)
     /// </summary>
     public class BookingDto
     {
         public int Id { get; set; }
         public int ScheduleId { get; set; }
-        public string Status { get; set; } = string.Empty; // booked, cancelled
+        public string Status { get; set; } = string.Empty;
         public DateTime BookingTime { get; set; }
+        public string SeatCode { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+
+        public string FromStationName { get; set; } = string.Empty;
+        public string ToStationName { get; set; } = string.Empty;
+        public DateTime DepartureDateTime { get; set; }
+        public DateTime ArrivalDateTime { get; set; }
     }
 
+
     /// <summary>
-    /// DTO для детального перегляду бронювання (касирами)
+    /// DTO для детального перегляду бронювання (касирами або адміністратором)
     /// </summary>
     public class BookingDetailsDto
     {
@@ -42,5 +51,9 @@ namespace TicketBookingSystem.Models.DTOs
         public string ToStation { get; set; } = string.Empty;
         public DateTime? ScheduleDate { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string SeatCode { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
+
 }

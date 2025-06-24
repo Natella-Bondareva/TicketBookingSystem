@@ -18,9 +18,14 @@ namespace TicketBookingSystem.Controllers
         [HttpPost("with-availability")]
         public async Task<IActionResult> SearchWithAvailability([FromBody] SearchRouteDto dto)
         {
-            var routes = await _searchService.SearchRoutesWithSeatAvailabilityAsync(dto);
-            return Ok(routes);
+            if (dto.AllowTransfers)
+            {
+                var withTransfers = await _searchService.SearchRoutesWithTransfersAsync(dto);
+                return Ok(withTransfers);
+            }
+
+            var directRoutes = await _searchService.SearchRoutesWithSeatAvailabilityAsync(dto);
+            return Ok(directRoutes);
         }
     }
-
 }

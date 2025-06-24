@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TicketBookingSystem.Data;
-using TicketBookingSystem.Models.Entities;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace TicketBookingSystem.Services
 {
@@ -13,67 +14,80 @@ namespace TicketBookingSystem.Services
             _context = context;
         }
 
-        public async Task<int?> FindAvailableSeatAsync(int scheduleId, int fromStationId, int toStationId)
+        public async Task<List<int>> FindAvailableSeatAsync(int scheduleId, int fromStationId, int toStationId)
         {
-            var stops = await _context.ScheduleStops
+            // 1. Отримуємо всі місця на цьому рейсі
+            var seats = await _context.Seats
                 .Where(s => s.ScheduleId == scheduleId)
-                .OrderBy(s => s.StopOrder)
                 .ToListAsync();
 
-            var fromStop = stops.FirstOrDefault(s => s.StationId == fromStationId);
-            var toStop = stops.FirstOrDefault(s => s.StationId == toStationId);
+            // 1. Отримуємо Schedule, включаючи його маршрут
+            var schedule = await _context.Schedules
+                .Include(s => s.Route)
+                .FirstOrDefaultAsync(s => s.Id == scheduleId);
 
-            if (fromStop == null || toStop == null || fromStop.StopOrder >= toStop.StopOrder)
-                return null;
+            if (schedule == null)
+                return new List<int>();
 
-            int fromOrder = fromStop.StopOrder;
-            int toOrder = toStop.StopOrder;
+            var routeId = schedule.RouteId;
 
-            const int MAX_SEATS = 5;
+            // 2. Отримуємо RouteStops, щоб дізнатися StopOrder
+            var routeStops = await _context.RouteStops
+                .Where(rs => rs.RouteId == routeId)
+                .ToDictionaryAsync(rs => rs.StationId, rs => rs.StopOrder);
 
+            // 3. Побудова мапи StationId ? StopOrder
+            // (routeStops вже є цією мапою)
+
+            // 4. Перевірка чи станції є у маршруті
+            if (!routeStops.TryGetValue(fromStationId, out var fromOrder) ||
+                !routeStops.TryGetValue(toStationId, out var toOrder) ||
+                fromOrder >= toOrder)
+            {
+                return new List<int>(); // Невалідний сегмент
+            }
+
+            // 5. Отримуємо всі активні бронювання
+            var bookings = await _context.Bookings
+                .Where(b => b.ScheduleId == scheduleId &&
+                            (b.BookingStatus.Name == "active" || b.BookingStatus.Name == "completed"))
+                .Select(b => new { b.SeatId, b.FromStationId, b.ToStationId })
+                .ToListAsync();
+
+            // 6. Побудова карти зайнятості кожного SeatId
             var seatMap = new Dictionary<int, List<(int from, int to)>>();
 
-            var tickets = await _context.Tickets
-                .Where(t => t.ScheduleId == scheduleId)
-                .Select(t => new { t.SeatNumber, t.FromStationId, t.ToStationId })
-                .ToListAsync();
-
-            var bookings = await _context.Bookings
-                .Where(b => b.ScheduleId == scheduleId && b.Status == "booked")
-                .Select(b => new { b.SeatNumber, b.FromStationId, b.ToStationId })
-                .ToListAsync();
-
-            foreach (var t in tickets)
+            void RegisterOccupied(Dictionary<int, List<(int, int)>> map, IEnumerable<dynamic> records)
             {
-                var tFrom = stops.FirstOrDefault(s => s.StationId == t.FromStationId)?.StopOrder ?? -1;
-                var tTo = stops.FirstOrDefault(s => s.StationId == t.ToStationId)?.StopOrder ?? -1;
-                if (tFrom != -1 && tTo != -1)
+                foreach (var r in records)
                 {
-                    if (!seatMap.ContainsKey(t.SeatNumber))
-                        seatMap[t.SeatNumber] = new List<(int, int)>();
-                    seatMap[t.SeatNumber].Add((tFrom, tTo));
+                    if (!routeStops.TryGetValue(r.FromStationId, out int sFrom))
+                        continue;
+
+                    if (!routeStops.TryGetValue(r.ToStationId, out int sTo))
+                        continue;
+
+                    if (!map.ContainsKey(r.SeatId))
+                        map[r.SeatId] = new List<(int, int)>();
+
+                    map[r.SeatId].Add((sFrom, sTo));
                 }
             }
 
-            foreach (var b in bookings)
-            {
-                var bFrom = stops.FirstOrDefault(s => s.StationId == b.FromStationId)?.StopOrder ?? -1;
-                var bTo = stops.FirstOrDefault(s => s.StationId == b.ToStationId)?.StopOrder ?? -1;
-                if (bFrom != -1 && bTo != -1)
-                {
-                    if (!seatMap.ContainsKey(b.SeatNumber))
-                        seatMap[b.SeatNumber] = new List<(int, int)>();
-                    seatMap[b.SeatNumber].Add((bFrom, bTo));
-                }
-            }
+            RegisterOccupied(seatMap, bookings);
 
-            for (int seat = 1; seat <= MAX_SEATS; seat++)
+            // 7. Перевірка доступності місць
+            var freeSeats = new List<int>();
+
+            foreach (var seat in seats)
             {
-                var occupied = seatMap.ContainsKey(seat) ? seatMap[seat] : new List<(int, int)>();
+                var occupiedSegments = seatMap.ContainsKey(seat.Id) ? seatMap[seat.Id] : new List<(int, int)>();
 
                 bool isFree = true;
-                foreach (var segment in occupied)
+
+                foreach (var segment in occupiedSegments)
                 {
+                    // Якщо є перетин з сегментом користувача ? місце зайняте
                     if (!(toOrder <= segment.Item1 || fromOrder >= segment.Item2))
                     {
                         isFree = false;
@@ -82,10 +96,10 @@ namespace TicketBookingSystem.Services
                 }
 
                 if (isFree)
-                    return seat;
+                    freeSeats.Add(seat.Id); // Додаємо вільне місце
             }
 
-            return null;
+            return freeSeats;
         }
     }
 }

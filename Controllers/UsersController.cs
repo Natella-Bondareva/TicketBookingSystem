@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TicketBookingSystem.Models.DTOs;
+using TicketBookingSystem.Models.Entities;
+
 using Microsoft.AspNetCore.Authorization;
 using TicketBookingSystem.Services;
 using TicketBookingSystem.Data;
@@ -15,19 +17,47 @@ namespace TicketBookingSystem.Controllers
     {
         private readonly TokenService _tokenService;
         private readonly AppDbContext _context;
+        private readonly IUserService _userService;
 
-        public UsersController(AppDbContext context, TokenService tokenService)
+
+        public UsersController(AppDbContext context, TokenService tokenService, IUserService userService)
         {
             _context = context;
             _tokenService = tokenService;
+            _userService = userService;
         }
 
-        // Реєстрація користувача
         [HttpPost("register")]
-        public IActionResult Register([FromBody] RegisterUserDto dto)
+        public async Task<IActionResult> Register([FromBody] RegisterUserDto dto)
         {
-            // Реєстрація логіка тут
-            return Ok(new { message = "User registered" });
+            if (await _context.Users.AnyAsync(u => u.Login == dto.Login || u.Email == dto.Email))
+            {
+                return Conflict(new { message = "Користувач з таким логіном або email вже існує." });
+            }
+
+            var defaultRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "admin");
+            if (defaultRole == null)
+            {
+                return StatusCode(500, new { message = "Роль 'client' не знайдена в системі." });
+            }
+
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+
+            var user = new User
+            {
+                Login = dto.Login,
+                Email = dto.Email,
+                Name = dto.Name,
+                Surname = dto.Surname,
+                PhoneNumber = dto.PhoneNumber,
+                PasswordHash = hashedPassword,
+                RoleId = defaultRole.Id
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Користувача успішно зареєстровано." });
         }
 
         [HttpPost("login")]
@@ -36,19 +66,25 @@ namespace TicketBookingSystem.Controllers
             try
             {
                 var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Login == dto.Login && u.PasswordHash == dto.Password);
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Login == dto.Login);
 
-                if (user == null)
+                if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+                {
                     return Unauthorized(new { message = "Невірний логін або пароль" });
+                }
+
 
                 var token = _tokenService.GenerateToken(user);
 
-                return Ok(new
+                var response = new AuthResponseDto
                 {
-                    token,
-                    userId = user.Id,
-                    role = user.Role
-                });
+                    Token = token,
+                    UserId = user.Id,
+                    Role = user.Role.Name
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
@@ -58,18 +94,24 @@ namespace TicketBookingSystem.Controllers
 
         // Перегляд профілю
         [HttpGet("{id}")]
-        public IActionResult GetUser(int id)
+        public async Task<IActionResult> GetUser(int id)
         {
-            // Пошук користувача логіка тут
-            return Ok(new { id, name = "User Name" });
+            var user = await _userService.GetUserByIdAsync(id);
+            if (user == null)
+                return NotFound(new { message = "User not found" });
+
+            return Ok(user);
         }
 
         // Оновлення профілю
         [HttpPut("{id}")]
-        public IActionResult UpdateUser(int id, [FromBody] UpdateUserDto dto)
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
         {
-            // Оновлення профілю логіка тут
-            return Ok(new { message = "User updated" });
+            var success = await _userService.UpdateUserAsync(id, dto);
+            if (!success)
+                return NotFound(new { message = "User not found or not updated" });
+
+            return Ok(new { message = "User updated successfully" });
         }
     }
 }

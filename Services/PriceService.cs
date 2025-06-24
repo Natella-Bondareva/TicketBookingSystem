@@ -7,13 +7,28 @@ namespace TicketBookingSystem.Services
 {
     public class PriceService
     {
-        public static decimal CalculatePrice(int fromOrder, int toOrder)
-        {
-            int segmentLength = toOrder - fromOrder;
-            if (segmentLength <= 0)
-                throw new ArgumentException("Некоректні зупинки.");
 
-            return 100 + 25 * segmentLength; // прикладна логіка
-        }
+            /// <summary>
+            /// Обчислює вартість квитка на основі порядку зупинок у маршруті.
+            /// </summary>
+            /// <param name="fromOrder">Порядковий номер станції посадки (StopOrder).</param>
+            /// <param name="toOrder">Порядковий номер станції висадки (StopOrder).</param>
+            /// <returns>Вартість поїздки у гривнях.</returns>
+            public static decimal CalculatePrice(int fromOrder, int toOrder)
+            {
+                if (fromOrder < 0 || toOrder < 0)
+                    throw new ArgumentException("Номери зупинок не можуть бути від'ємними.");
+
+                int segmentCount = toOrder - fromOrder;
+
+                if (segmentCount <= 0)
+                    throw new ArgumentException("Кінцева зупинка має бути пізніше початкової.");
+
+                const decimal basePrice = 100m;
+                const decimal pricePerSegment = 25m;
+
+                return basePrice + pricePerSegment * segmentCount;
+            }
+        
     }
 }

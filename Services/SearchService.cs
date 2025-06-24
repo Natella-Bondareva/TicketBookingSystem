@@ -19,38 +19,77 @@ namespace TicketBookingSystem.Services
 
         public async Task<IEnumerable<RouteSearchWithSeatsDto>> SearchRoutesWithSeatAvailabilityAsync(SearchRouteDto dto)
         {
+            string fromName = (dto.FromStation ?? "").Trim().ToLowerInvariant();
+            string toName = (dto.ToStation ?? "").Trim().ToLowerInvariant();
+            DateTime? searchDate = dto.Date?.Date;
+
+            var fromStationId = await _context.Stations
+                .Where(s => s.Name.ToLower() == dto.FromStation.ToLower())
+                .Select(s => s.Id)
+                .FirstOrDefaultAsync();
+
+            var toStationId = await _context.Stations
+                .Where(s => s.Name.ToLower() == dto.ToStation.ToLower())
+                .Select(s => s.Id)
+                .FirstOrDefaultAsync();
+
+            if (fromStationId == 0 || toStationId == 0)
+                return Enumerable.Empty<RouteSearchWithSeatsDto>();
+
             var schedules = await _context.Schedules
-                .Include(s => s.Route).ThenInclude(r => r.StartStation)
-                .Include(s => s.Route).ThenInclude(r => r.EndStation)
-                .Include(s => s.ScheduleStops).ThenInclude(ss => ss.Station)
+                .Include(s => s.ScheduleStops)
+                    .ThenInclude(ss => ss.Station)
+                .Include(s => s.Route)
+                    .ThenInclude(r => r.StartStation)
+                .Include(s => s.Route)
+                    .ThenInclude(r => r.EndStation)
+                .Where(s => s.ScheduleStops.Any(ss => ss.StationId == fromStationId) &&
+                            s.ScheduleStops.Any(ss => ss.StationId == toStationId))
+                .Where(s => !dto.Date.HasValue || s.Date == dto.Date.Value)
                 .ToListAsync();
 
             var results = new List<RouteSearchWithSeatsDto>();
 
             foreach (var schedule in schedules)
             {
-                var fromStop = schedule.ScheduleStops.FirstOrDefault(s => s.Station.Name.ToLower() == dto.FromStation.ToLower());
-                var toStop = schedule.ScheduleStops.FirstOrDefault(s => s.Station.Name.ToLower() == dto.ToStation.ToLower());
+                var stops = schedule.ScheduleStops.ToList();
+                var stopOrders = await _context.RouteStops
+                    .Where(rs => rs.RouteId == schedule.RouteId &&
+                                 (rs.StationId == fromStationId || rs.StationId == toStationId))
+                    .ToDictionaryAsync(rs => rs.StationId, rs => rs.StopOrder);
 
-                if (fromStop == null || toStop == null || fromStop.StopOrder >= toStop.StopOrder)
+                var fromStop = stops.FirstOrDefault(s => s.StationId == fromStationId);
+
+                var toStop = stops.FirstOrDefault(s => s.StationId == toStationId);
+
+                if (fromStop == null || toStop == null || stopOrders[fromStationId] >= stopOrders[toStationId])
                     continue;
 
-                if (dto.Date.HasValue && schedule.Date.Date != dto.Date.Value.Date)
-                    continue;
+                // знайти вс≥ доступн≥ м≥сц€ (маЇ повертати список, не т≥льки перше)
+                var freeSeats = await _autoSeatService.FindAvailableSeatAsync(schedule.Id, fromStop.StationId, toStop.StationId);
 
-                // ѕерев≥р€Їмо на€вн≥сть в≥льного м≥сц€
-                var seat = await _autoSeatService.FindAvailableSeatAsync(schedule.Id, fromStop.StationId, toStop.StationId);
-
-                results.Add(new RouteSearchWithSeatsDto
+                if (freeSeats.Count > 0)
                 {
-                    ScheduleId = schedule.Id,
-                    RouteName = $"{schedule.Route.StartStation.Name} ? {schedule.Route.EndStation.Name}",
-                    FromStation = dto.FromStation,
-                    ToStation = dto.ToStation,
-                    DepartureTime = schedule.Date.Date + fromStop.DepartureTime,
-                    ArrivalTime = schedule.Date.Date + toStop.ArrivalTime,
-                    SeatsAvailable = seat.HasValue
-                });
+                    if (schedule.Route == null) Console.WriteLine("Route is null");
+                    if (schedule.Route?.StartStation == null) Console.WriteLine("StartStation is null");
+
+                    var price = PriceService.CalculatePrice(stopOrders[fromStationId], stopOrders[toStationId]);
+
+                    results.Add(new RouteSearchWithSeatsDto
+                    {
+                        ScheduleId = schedule.Id,
+                        RouteName = $"{schedule.Route.StartStation.Name} Ц {schedule.Route.EndStation.Name}",
+                        FromStation = fromStop.Station.Name,
+                        ToStation = toStop.Station.Name,
+                        FromStationId = fromStop.StationId,
+                        ToStationId = toStop.StationId,
+                        DepartureTime = schedule.Date.Date + fromStop.DepartureTime,
+                        ArrivalTime = schedule.Date.Date + toStop.ArrivalTime,
+                        SeatsAvailable = true,
+                        FreeSeats = freeSeats,
+                        Price = price
+                    });
+                }
             }
 
             return results;
@@ -58,72 +97,99 @@ namespace TicketBookingSystem.Services
 
         public async Task<IEnumerable<TransferRouteDto>> SearchRoutesWithTransfersAsync(SearchRouteDto dto)
         {
+            var fromName = dto.FromStation.ToLower();
+            var toName = dto.ToStation.ToLower();
+
             var schedules = await _context.Schedules
                 .Include(s => s.ScheduleStops).ThenInclude(ss => ss.Station)
-                .Include(s => s.Route).ThenInclude(r => r.StartStation)
-                .Include(s => s.Route).ThenInclude(r => r.EndStation)
+                .Include(s => s.Route).ThenInclude(r => r.RouteStops)
+                .Where(s => !dto.Date.HasValue || s.Date.Date == dto.Date.Value.Date)
                 .ToListAsync();
 
             var results = new List<TransferRouteDto>();
-
             const int MIN_TRANSFER_MINUTES = 10;
-            const int MAX_TRANSFER_MINUTES = 120;
+            const int MAX_TRANSFER_MINUTES = 360;
 
             foreach (var s1 in schedules)
             {
-                var fromStop1 = s1.ScheduleStops.FirstOrDefault(ss => ss.Station.Name.ToLower() == dto.FromStation.ToLower());
+                var routeStops1 = s1.Route.RouteStops;
+
+                var fromStop1 = s1.ScheduleStops
+                    .FirstOrDefault(ss => ss.Station.Name.ToLower() == fromName);
                 if (fromStop1 == null) continue;
+
+                var fromStopOrder1 = routeStops1
+                    .FirstOrDefault(rs => rs.StationId == fromStop1.StationId)?.StopOrder;
+                if (fromStopOrder1 == null) continue;
 
                 foreach (var midStop1 in s1.ScheduleStops)
                 {
-                    if (midStop1.StopOrder <= fromStop1.StopOrder)
-                        continue;
+                    var midStopOrder1 = routeStops1
+                        .FirstOrDefault(rs => rs.StationId == midStop1.StationId)?.StopOrder;
 
-                    string midStationName = midStop1.Station.Name;
+                    if (midStopOrder1 == null || midStopOrder1 <= fromStopOrder1) continue;
 
-                    var seat1 = await _autoSeatService.FindAvailableSeatAsync(s1.Id, fromStop1.StationId, midStop1.StationId);
-                    if (!seat1.HasValue) continue;
+                    var seat1 = await _autoSeatService.FindAvailableSeatAsync(
+                        s1.Id, fromStop1.StationId, midStop1.StationId);
+                    if (seat1 == null) continue;
 
-                    DateTime arrivalAtMid = s1.Date.Date + midStop1.ArrivalTime;
+                    var arrivalAtMid = s1.Date.Date + midStop1.ArrivalTime;
 
                     foreach (var s2 in schedules)
                     {
                         if (s1.Id == s2.Id) continue;
 
-                        var midStop2 = s2.ScheduleStops.FirstOrDefault(ss => ss.Station.Name.ToLower() == midStationName.ToLower());
-                        var toStop2 = s2.ScheduleStops.FirstOrDefault(ss => ss.Station.Name.ToLower() == dto.ToStation.ToLower());
+                        var routeStops2 = s2.Route.RouteStops;
 
-                        if (midStop2 == null || toStop2 == null || midStop2.StopOrder >= toStop2.StopOrder)
-                            continue;
+                        var midStop2 = s2.ScheduleStops
+                            .FirstOrDefault(ss => ss.StationId == midStop1.StationId);
+                        if (midStop2 == null) continue;
 
-                        if (dto.Date.HasValue && s2.Date.Date != dto.Date.Value.Date)
-                            continue;
+                        var midStopOrder2 = routeStops2
+                            .FirstOrDefault(rs => rs.StationId == midStop2.StationId)?.StopOrder;
 
-                        DateTime departureFromMid = s2.Date.Date + midStop2.DepartureTime;
+                        if (midStopOrder2 == null) continue;
 
+                        var toStop2 = s2.ScheduleStops
+                            .FirstOrDefault(ss => ss.Station.Name.ToLower() == toName);
+                        if (toStop2 == null) continue;
+
+                        var toStopOrder2 = routeStops2
+                            .FirstOrDefault(rs => rs.StationId == toStop2.StationId)?.StopOrder;
+
+                        if (toStopOrder2 == null || midStopOrder2 >= toStopOrder2) continue;
+
+                        if (s2.Date.Date != s1.Date.Date) continue;
+
+                        var departureFromMid = s2.Date.Date + midStop2.DepartureTime;
                         var waitMinutes = (departureFromMid - arrivalAtMid).TotalMinutes;
 
                         if (waitMinutes < MIN_TRANSFER_MINUTES || waitMinutes > MAX_TRANSFER_MINUTES)
                             continue;
 
-                        var seat2 = await _autoSeatService.FindAvailableSeatAsync(s2.Id, midStop2.StationId, toStop2.StationId);
-                        if (!seat2.HasValue) continue;
+                        var seat2 = await _autoSeatService.FindAvailableSeatAsync(
+                            s2.Id, midStop2.StationId, toStop2.StationId);
+                        if (seat2 == null) continue;
 
-                        // ќбчислюЇмо варт≥сть €к: базова + 10 грн за сегмент
-                        var price1 = 100 + 10 * (midStop1.StopOrder - fromStop1.StopOrder);
-                        var price2 = 100 + 10 * (toStop2.StopOrder - midStop2.StopOrder);
+                        var price1 = PriceService.CalculatePrice(fromStopOrder1.Value, midStopOrder1.Value);
+                        var price2 = PriceService.CalculatePrice(midStopOrder2.Value, toStopOrder2.Value);
 
                         results.Add(new TransferRouteDto
                         {
                             FirstScheduleId = s1.Id,
                             FirstFromStation = fromStop1.Station.Name,
                             FirstToStation = midStop1.Station.Name,
+                            FirstFromStationId = fromStop1.StationId,
+                            FirstToStationId = midStop1.StationId,
+
                             FirstDeparture = s1.Date.Date + fromStop1.DepartureTime,
                             FirstArrival = arrivalAtMid,
 
                             SecondScheduleId = s2.Id,
                             SecondFromStation = midStop2.Station.Name,
                             SecondToStation = toStop2.Station.Name,
+                            SecondFromStationId = midStop2.StationId,
+                            SecondToStationId = toStop2.StationId,
                             SecondDeparture = departureFromMid,
                             SecondArrival = s2.Date.Date + toStop2.ArrivalTime,
 
@@ -136,6 +202,4 @@ namespace TicketBookingSystem.Services
             return results;
         }
     }
-
-
 }

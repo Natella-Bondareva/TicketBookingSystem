@@ -12,7 +12,6 @@ namespace TicketBookingSystem.Models.Entities
 		public DateTime Date { get; set; }
 		public Route Route { get; set; }
 		public ICollection<ScheduleStop> ScheduleStops { get; set; }
-		public ICollection<Ticket> Tickets { get; set; }
 		public ICollection<Booking> Bookings { get; set; }
 	}
 }

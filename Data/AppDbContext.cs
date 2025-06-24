@@ -17,6 +17,10 @@ namespace TicketBookingSystem.Data
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<Payment> Payments { get; set; }
+        public DbSet<BookingStatus> BookingStatuses { get; set; }
+        public DbSet<PaymentMethod> PaymentMethods { get; set; }
+        public DbSet<Role> Roles { get; set; }
+        public DbSet<Seat> Seats { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -27,6 +31,24 @@ namespace TicketBookingSystem.Data
                 .HasKey(ss => new { ss.ScheduleId, ss.StationId });
 
             // Додаткові зв'язки
+            modelBuilder.Entity<Schedule>()
+                .HasOne(s => s.Route)
+                .WithMany(r => r.Schedules)
+                .HasForeignKey(s => s.RouteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RouteStop>()
+                .HasOne(rs => rs.Route)
+                .WithMany(r => r.RouteStops)
+                .HasForeignKey(rs => rs.RouteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ScheduleStop>()
+                .HasOne(ss => ss.Schedule)
+                .WithMany(s => s.ScheduleStops)
+                .HasForeignKey(ss => ss.ScheduleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<RouteEntity>()
                 .HasOne(r => r.StartStation)
                 .WithMany()
@@ -36,7 +58,8 @@ namespace TicketBookingSystem.Data
             modelBuilder.Entity<Ticket>()
                 .HasOne(t => t.Booking)
                 .WithOne(b => b.Ticket)
-                .HasForeignKey<Ticket>(t => t.BookingId);
+                .HasForeignKey<Ticket>(t => t.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<RouteEntity>()
                 .HasOne(r => r.EndStation)
@@ -44,14 +67,77 @@ namespace TicketBookingSystem.Data
                 .HasForeignKey(r => r.EndStationId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Booking.Status check constraint
-            modelBuilder.Entity<Booking>()
-                .Property(b => b.Status)
-                .HasMaxLength(10);
+            modelBuilder.Entity<RouteEntity>()
+                .Property(r => r.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<Schedule>()
+                .Property(s => s.Id)
+                .ValueGeneratedOnAdd();
+
+            modelBuilder.Entity<Station>()
+                .Property(s => s.Id)
+                .ValueGeneratedOnAdd();
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
                 .IsUnique();
+
+            modelBuilder.Entity<Seat>()
+                .HasIndex(s => new { s.ScheduleId, s.SeatCode })
+                .IsUnique(); 
+
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.Seat)
+                .WithMany(s => s.Bookings)
+                .HasForeignKey(b => b.SeatId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Payment>()
+                .HasOne(p => p.Booking)
+                .WithOne(b => b.Payment)
+                .HasForeignKey<Payment>(p => p.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.BookingStatus)
+                .WithMany(s => s.Bookings)
+                .HasForeignKey(b => b.BookingStatusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Payment>()
+                .HasOne(p => p.PaymentMethod)
+                .WithMany(m => m.Payments)
+                .HasForeignKey(p => p.PaymentMethodId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Role)
+                .WithMany(r => r.Users)
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Role>().HasData(
+                new Role { Id = 1, Name = "client" },
+                new Role { Id = 2, Name = "cashier" },
+                new Role { Id = 3, Name = "admin" }
+                );
+
+            modelBuilder.Entity<PaymentMethod>().HasData(
+                new PaymentMethod { Id = 1, Name = "cash" },
+                new PaymentMethod { Id = 2, Name = "card" }
+                );
+
+            modelBuilder.Entity<BookingStatus>().HasData(
+                new BookingStatus { Id = 1, Name = "cancelled" },
+                new BookingStatus { Id = 2, Name = "active" },
+                new BookingStatus { Id = 3, Name = "completed" }
+                );
+            modelBuilder.Entity<Schedule>()
+                .Property(s => s.Date)
+                .HasColumnType("date");
+
         }
     }
 }
