@@ -28,9 +28,9 @@ Built with **.NET**, **React**, and **PostgreSQL**, this project demonstrates fu
 
 ## Live Demo
 
-![video5422783488401110708](https://github.com/user-attachments/assets/cabdb88e-555f-49d1-a967-6a2c17adecbc)
+![Uploading video5422783488401110708.gif…]()
 
-![video5422783488401110706](https://github.com/user-attachments/assets/1e330bae-a127-4cea-9f2c-e0a0e7114827)
+![Uploading video5422783488401110706.gif…]()
 
 
 ---
