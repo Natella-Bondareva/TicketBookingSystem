@@ -39,49 +39,47 @@ Built with **.NET**, **React**, and **PostgreSQL**, this project demonstrates fu
 
 ```bash
 # Backend
-cd backend
 dotnet run
 ```
 ```bash
 # Frontend
-cd frontend
-npm install
-npm start
+cd client
+npm run dev
 ```
 
 ---
 
-##Current Status
+## Current Status
 This project is a work in progress. The core booking logic is implemented, and the main functionality is operational. Upcoming improvements aim to increase the usability, scalability, and maintainability of the system.
 
 
 ---
 
-##Future Improvements
+## Future Improvements
 To increase the usability and real-world applicability of the project, the following enhancements are planned:
 
-Smart schedule creation for administrators
++ Smart schedule creation for administrators
 Add recurring schedules (e.g., every two days or every Tuesday) to reduce repetitive manual entry and improve administrative efficiency.
 
-UI/UX improvements
++ UI/UX improvements
 Enhance the user interface and booking flow for better usability and user experience.
 
-Database refinement
++ Database refinement
 Improve relational logic and normalize the structure for better performance and data consistency.
 
-Expanded testing
++ Expanded testing
 Add more unit and integration tests to ensure stability and reliability in edge cases.
 
 
 ---
 
-##Motivation and Learning Outcome
+## Motivation and Learning Outcome
 This project helped me strengthen my understanding of:
 
-Full-stack application flow from database to front-end
++ Full-stack application flow from database to front-end
 
-REST API design and client-server communication principles
++ REST API design and client-server communication principles
 
-Working with relational databases and modeling relationships
++ Working with relational databases and modeling relationships
 
-Debugging and solving problems using .NET and Entity Framework
++ Debugging and solving problems using .NET and Entity Framework
