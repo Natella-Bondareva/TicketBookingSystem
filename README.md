@@ -41,7 +41,8 @@ Built with **.NET**, **React**, and **PostgreSQL**, this project demonstrates fu
 # Backend
 cd backend
 dotnet run
-
+```
+```bash
 # Frontend
 cd frontend
 npm install
